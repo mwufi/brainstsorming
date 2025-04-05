@@ -1,0 +1,43 @@
+{
+  "openai": {
+    "gpt-4o": {
+      "name": "gpt-4o",
+      "description": "Most capable GPT-4 model, optimized for chat",
+      "max_tokens": 8192,
+      "category": "general"
+    },
+    "gpt-4o-mini": {
+      "name": "gpt-4o-mini",
+      "description": "Smaller, faster version of GPT-4o optimized for chat",
+      "max_tokens": 4096,
+      "category": "general"
+    }
+  },
+  "openrouter": {
+    "microsoft/wizardlm-2-8x22b": {
+      "name": "microsoft/wizardlm-2-8x22b",
+      "description": "Microsoft's WizardLM 2 model with 22B parameters",
+      "max_tokens": 4096,
+      "category": "general"
+    },
+    "rekaai/reka-flash-3:free": {
+      "name": "rekaai/reka-flash-3:free",
+      "description": "Free version of Reka's Flash-3 model",
+      "max_tokens": 4096,
+      "category": "general"
+    },
+    "meta-llama/llama-4-scout": {
+      "name": "meta-llama/llama-4-scout",
+      "description": "Meta's Llama 4 Scout model",
+      "max_tokens": 4096,
+      "category": "general"
+    },
+    "openrouter/quasar-alpha": {
+      "name": "openrouter/quasar-alpha",
+      "description": "A cloaked model provided to the community to gather feedback. Powerful, all-purpose model supporting long-context tasks, including code generation. All prompts and completions are logged.",
+      "max_tokens": 32768,
+      "category": "experimental",
+      "is_experimental": true
+    }
+  }
+}
