@@ -101,7 +101,7 @@ def create_provider(config: ProviderConfig) -> Dict:
     }
 
 
-def create_openai_provider(api_key: str, model: str = "gpt-4") -> Dict:
+def create_openai_provider(api_key: str, model: str = "gpt-4o") -> Dict:
     config = ProviderConfig(
         api_key=api_key,
         model=model,
@@ -112,7 +112,7 @@ def create_openai_provider(api_key: str, model: str = "gpt-4") -> Dict:
 
 def create_openrouter_provider(
     api_key: str,
-    model: str = "openai/gpt-4",
+    model: str = "openai/gpt-4o",
     site_url: Optional[str] = None,
     site_name: Optional[str] = None
 ) -> Dict:
@@ -142,10 +142,10 @@ class AI:
             **kwargs: Provider-specific arguments
                 For OpenAI:
                     - api_key: Your OpenAI API key
-                    - model: Model name (default: "gpt-4")
+                    - model: Model name (default: "gpt-4o")
                 For OpenRouter:
                     - api_key: Your OpenRouter API key
-                    - model: Model name (default: "openai/gpt-4")
+                    - model: Model name (default: "openai/gpt-4o")
                     - site_url: Your site URL (optional)
                     - site_name: Your site name (optional)
         """
@@ -163,9 +163,9 @@ class AI:
     def _get_default_model(self, provider: str) -> str:
         """Get the default model for a provider"""
         if provider == "openai":
-            return "gpt-4"
+            return "gpt-4o"
         elif provider == "openrouter":
-            return "openai/gpt-4"
+            return "openai/gpt-4o"
         else:
             raise ValueError(f"Unknown provider: {provider}")
 

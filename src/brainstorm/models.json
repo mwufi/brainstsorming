@@ -14,6 +14,12 @@
     }
   },
   "openrouter": {
+    "openai/gpt-4o": {
+      "name": "openai/gpt-4o",
+      "description": "OpenAI's GPT-4o model accessed through OpenRouter",
+      "max_tokens": 8192,
+      "category": "general"
+    },
     "microsoft/wizardlm-2-8x22b": {
       "name": "microsoft/wizardlm-2-8x22b",
       "description": "Microsoft's WizardLM 2 model with 22B parameters",
