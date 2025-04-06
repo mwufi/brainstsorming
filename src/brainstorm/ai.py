@@ -6,7 +6,7 @@ import json
 import os
 from typing import List, Dict, Optional, Callable, Protocol
 from openai import OpenAI
-from src.brainstorm.agents import Tool
+from src.brainstorm.tools import Tool
 
 
 # Load models from JSON file
