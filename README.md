@@ -1,5 +1,5 @@
 
-![Screenshot 1](docs/screenshot1)
+![Screenshot 1](docs/screenshot1.png)
 
 # How to run
 
