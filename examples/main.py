@@ -4,6 +4,7 @@ import os
 import re
 import sys
 import json
+import argparse
 from pathlib import Path
 from dotenv import load_dotenv
 from rich import print
@@ -12,6 +13,7 @@ from rich.console import Console
 from rich.prompt import Prompt
 from rich.text import Text
 from rich.style import Style
+from rich.live import Live
 
 load_dotenv()
 
@@ -52,15 +54,28 @@ def format_response(text):
     
     return rich_text
 
-def main():
-    console = Console()
+def format_stream_chunk(chunk, buffer=""):
+    """Format a single streaming chunk to handle italics."""
+    # Combine the buffer with the current chunk
+    full_text = buffer + chunk
     
-    # Get agent name from command line or use default
-    agent_name = sys.argv[1] if len(sys.argv) > 1 else "catgirl"
+    # Process the complete text with proper formatting
+    return format_response(full_text), full_text
+
+def parse_args():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description="Chat with an AI agent")
+    parser.add_argument("agent", nargs="?", default="catgirl", help="Agent name to use")
+    parser.add_argument("--stream", action="store_true", help="Use streaming mode")
+    return parser.parse_args()
+
+def main():
+    args = parse_args()
+    console = Console()
     
     try:
         # Load agent configuration
-        config = load_agent_config(agent_name)
+        config = load_agent_config(args.agent)
         
         # Initialize AI with config
         ai = AI(
@@ -73,8 +88,12 @@ def main():
             name=config["name"],
             description=config["description"],
             tools=[],
-            ai=ai
+            ai=ai,
+            default_model=config["ai_config"]["model"]
         )
+
+        # Create a single conversation ID to use for the entire session
+        conversation_id = agent.init_conversation()
 
         # Update header with agent name
         header_text = f"\n[bold magenta]🤖 {config['name']} AI Chat[/bold magenta]\n"
@@ -90,9 +109,41 @@ def main():
                 if user_input.lower() in ["exit", "quit"]:
                     break
 
-                response = agent.run(user_input)
-                formatted_response = format_response(response)
-                console.print(f"[bold magenta]{config['name']}[/bold magenta]:", formatted_response)
+                if args.stream:
+                    # Print the agent name on its own line first
+                    console.print(f"[bold magenta]{config['name']}[/bold magenta]:")
+                    
+                    # Initialize response buffer
+                    buffer = ""
+                    
+                    # Create a Live display for formatted output
+                    with Live("", refresh_per_second=10, console=console) as live_display:
+                        # Stream handler function
+                        def handle_stream(chunk):
+                            nonlocal buffer
+                            # Update buffer with new chunk
+                            buffer += chunk
+                            # Format the entire accumulated text with proper handling of formatting
+                            formatted_text, _ = format_stream_chunk("", buffer)
+                            # Update the live display with formatted text
+                            live_display.update(formatted_text)
+                        
+                        # Run agent with streaming
+                        agent.run(
+                            user_input,
+                            conversation_id=conversation_id,
+                            stream=True,
+                            stream_handler=handle_stream
+                        )
+                    
+                    # Print a newline after streaming is done
+                    console.print()
+                else:
+                    # Traditional non-streaming response
+                    response = agent.run(user_input, conversation_id=conversation_id)
+                    formatted_response = format_response(response)
+                    console.print(f"[bold magenta]{config['name']}[/bold magenta]:", formatted_response)
+                
                 console.print()
 
             except KeyboardInterrupt:

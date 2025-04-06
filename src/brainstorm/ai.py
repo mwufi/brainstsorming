@@ -4,20 +4,31 @@ Contains utilities to get intelligent responses from various AI providers
 
 import json
 import os
-from typing import List, Dict, Optional, Callable, Protocol
+from typing import List, Dict, Optional, Callable, Protocol, Iterator, Union
 from openai import OpenAI
 from src.brainstorm.tools import Tool
 
 
-# Load models from JSON file
+# Default values
+DEFAULT_MODELS = {
+    "openai": "gpt-4o",
+    "openrouter": "openai/gpt-4o"
+}
+
+DEFAULT_BASE_URLS = {
+    "openrouter": "https://openrouter.ai/api/v1"
+}
+
+
 def load_models():
+    """Load models from JSON file"""
     models_path = os.path.join(os.path.dirname(__file__), "models.json")
     with open(models_path, "r") as f:
         return json.load(f)
 
 
-# Get model info from the loaded models
 def get_model_info(model_name: str, provider: str = None):
+    """Get model info from the loaded models"""
     models = load_models()
     
     # If provider is specified, look in that provider's models
@@ -34,6 +45,7 @@ def get_model_info(model_name: str, provider: str = None):
 
 
 class ProviderConfig:
+    """Configuration for an AI provider"""
     def __init__(
         self,
         api_key: str,
@@ -55,6 +67,7 @@ class ProviderConfig:
 
 
 def create_openai_client(config: ProviderConfig) -> OpenAI:
+    """Create an OpenAI client with the given configuration"""
     return OpenAI(
         api_key=config.api_key,
         base_url=config.base_url
@@ -62,6 +75,7 @@ def create_openai_client(config: ProviderConfig) -> OpenAI:
 
 
 def handle_response(response) -> str:
+    """Handle response from AI provider"""
     if hasattr(response, 'error') and response.error:
         error_msg = response.error.get('message', 'Unknown error occurred')
         error_code = response.error.get('code', 'unknown')
@@ -73,11 +87,45 @@ def handle_response(response) -> str:
     return response.choices[0].message.content
 
 
+def handle_streaming_response(response) -> Iterator[str]:
+    """Handle streaming response from AI provider"""
+    for chunk in response:
+        # Different providers may have different chunk formats
+        # We'll handle the most common ones here
+        
+        # Handle OpenAI-style streaming format
+        if hasattr(chunk, 'choices') and chunk.choices:
+            choice = chunk.choices[0]
+            
+            # Handle the delta format (newer OpenAI API)
+            if hasattr(choice, 'delta'):
+                delta = choice.delta
+                if hasattr(delta, 'content') and delta.content is not None:
+                    yield delta.content
+            
+            # Handle the message format (some APIs)
+            elif hasattr(choice, 'message'):
+                message = choice.message
+                if hasattr(message, 'content') and message.content is not None:
+                    yield message.content
+                    
+            # Handle text format (older APIs)
+            elif hasattr(choice, 'text'):
+                if choice.text:
+                    yield choice.text
+
+
 def create_provider(config: ProviderConfig) -> Dict:
+    """Create a provider from configuration"""
     client = create_openai_client(config)
     
     def get_response(messages: List[Dict], **kwargs) -> str:
+        """Get a complete response from the provider"""
         model = kwargs.pop('model', config.model)
+        stream_mode = kwargs.pop('stream', False)
+        
+        if stream_mode:
+            return get_streaming_response(messages, model=model, **kwargs)
         
         response = client.chat.completions.create(
             model=model,
@@ -88,20 +136,48 @@ def create_provider(config: ProviderConfig) -> Dict:
         
         return handle_response(response)
     
-    def get_response_from_tool(tool: Tool, messages: List[Dict], **kwargs) -> str:
+    def get_streaming_response(messages: List[Dict], **kwargs) -> Iterator[str]:
+        """Get a streaming response from the provider"""
+        model = kwargs.pop('model', config.model)
+        
+        # Make sure we don't have stream in kwargs
+        if 'stream' in kwargs:
+            kwargs.pop('stream')
+            
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            extra_headers=config.extra_headers,
+            stream=True,
+            **kwargs
+        )
+        
+        return handle_streaming_response(response)
+    
+    def get_response_from_tool(tool: Tool, messages: List[Dict], **kwargs) -> Union[str, Iterator[str]]:
+        """Get a response using a tool"""
+        stream_mode = kwargs.get('stream', False)
+        if stream_mode:
+            return get_streaming_response(messages, **kwargs)
         return get_response(messages, **kwargs)
     
     def get_version() -> str:
+        """Get the version of the provider"""
         return f"{config.name} (Model: {config.model})"
     
     return {
         'get_response': get_response,
+        'get_streaming_response': get_streaming_response,
         'get_response_from_tool': get_response_from_tool,
         'version': get_version
     }
 
 
-def create_openai_provider(api_key: str, model: str = "gpt-4o") -> Dict:
+def create_openai_provider(api_key: str, model: str = None) -> Dict:
+    """Create an OpenAI provider"""
+    if model is None:
+        model = DEFAULT_MODELS["openai"]
+        
     config = ProviderConfig(
         api_key=api_key,
         model=model,
@@ -112,10 +188,14 @@ def create_openai_provider(api_key: str, model: str = "gpt-4o") -> Dict:
 
 def create_openrouter_provider(
     api_key: str,
-    model: str = "openai/gpt-4o",
+    model: str = None,
     site_url: Optional[str] = None,
     site_name: Optional[str] = None
 ) -> Dict:
+    """Create an OpenRouter provider"""
+    if model is None:
+        model = DEFAULT_MODELS["openrouter"]
+        
     extra_headers = {}
     if site_url:
         extra_headers["HTTP-Referer"] = site_url
@@ -125,7 +205,7 @@ def create_openrouter_provider(
     config = ProviderConfig(
         api_key=api_key,
         model=model,
-        base_url="https://openrouter.ai/api/v1",
+        base_url=DEFAULT_BASE_URLS["openrouter"],
         extra_headers=extra_headers,
         name="OpenRouter Provider"
     )
@@ -133,6 +213,7 @@ def create_openrouter_provider(
 
 
 class AI:
+    """Main AI class that handles interactions with AI providers"""
     def __init__(self, provider: str = "openai", **kwargs):
         """
         Initialize AI with specified provider
@@ -149,6 +230,10 @@ class AI:
                     - site_url: Your site URL (optional)
                     - site_name: Your site name (optional)
         """
+        # Use default model if not specified
+        if 'model' not in kwargs:
+            kwargs['model'] = DEFAULT_MODELS.get(provider)
+            
         if provider == "openai":
             self.provider = create_openai_provider(**kwargs)
         elif provider == "openrouter":
@@ -157,26 +242,29 @@ class AI:
             raise ValueError(f"Unknown provider: {provider}")
             
         # Store model info for reference
-        self.model_name = kwargs.get('model', self._get_default_model(provider))
+        self.model_name = kwargs.get('model', DEFAULT_MODELS.get(provider))
         self.model_info = get_model_info(self.model_name, provider)
 
-    def _get_default_model(self, provider: str) -> str:
-        """Get the default model for a provider"""
-        if provider == "openai":
-            return "gpt-4o"
-        elif provider == "openrouter":
-            return "openai/gpt-4o"
-        else:
-            raise ValueError(f"Unknown provider: {provider}")
-
-    def get_response(self, messages: List[Dict], **kwargs) -> str:
+    def get_response(self, messages: List[Dict], **kwargs) -> Union[str, Iterator[str]]:
+        """Get a response from the AI"""
+        stream_mode = kwargs.get('stream', False)
+        if stream_mode:
+            return self.get_streaming_response(messages, **kwargs)
         return self.provider['get_response'](messages, **kwargs)
+    
+    def get_streaming_response(self, messages: List[Dict], **kwargs) -> Iterator[str]:
+        """Get a streaming response from the AI"""
+        # Ensure stream is set to True
+        kwargs['stream'] = True
+        return self.provider['get_streaming_response'](messages, **kwargs)
 
-    def get_response_from_tool(self, tool: Tool, messages: List[Dict], **kwargs) -> str:
+    def get_response_from_tool(self, tool: Tool, messages: List[Dict], **kwargs) -> Union[str, Iterator[str]]:
+        """Get a response using a tool"""
         return self.provider['get_response_from_tool'](tool, messages, **kwargs)
 
     @property
     def version(self) -> str:
+        """Get the version of the AI"""
         return self.provider['version']()
         
     @property
