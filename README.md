@@ -1,9 +1,15 @@
 
+![Screenshot 1](docs/screenshot1)
+
 # How to run
 
-```
+```sh
+# Install deps (openai)
 uv sync
-uv run -m examples.main <agentName> (right now we only have 'catgirl' and 'adventuremaster')
+
+# Run agents
+uv run -m examples.main catgirl
+uv run -m examples.main adventuremaster
 ```
 
 ## Adding more agents
